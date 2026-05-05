@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Institution {
+  id        String     @id @default(cuid())
+  name      String
+  subdomain String     @unique
+  logoUrl   String?
+  planType  String     @default("FREE")
+  isActive  Boolean    @default(true)
+  apiKey    String     @unique @default(cuid())
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  users      User[]
+  leads      Lead[]
+  scoreRules ScoreRule[]
+  tasks      Task[]
+  notes      Note[]
+  activityLogs ActivityLog[]
+
+  @@map("institutions")
+}
+
+model User {
+  id            String     @id @default(cuid())
+  institutionId String
+  name          String
+  email         String
+  passwordHash  String
+  role          String     @default("COUNSELLOR")
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  assignedLeads Lead[] @relation("AssignedToUser")
+  assignedTasks Task[] @relation("AssignedToUser")
+  createdNotes  Note[] @relation("CreatedByUser")
+
+  @@unique([institutionId, email])
+  @@map("users")
+}
+
+model Lead {
+  id               String     @id @default(cuid())
+  institutionId    String
+  assignedToId     String?
+  name             String
+  email            String
+  phone            String
+  city             String?
+  courseInterested String?
+  source           String     @default("OTHER")
+  status           String     @default("NEW")
+  activityScore    Int        @default(0)
+  lastActivityAt   DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  institution   Institution   @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  assignedTo    User?         @relation("AssignedToUser", fields: [assignedToId], references: [id], onDelete: SetNull)
+  activityLogs  ActivityLog[]
+  tasks         Task[]
+  notes         Note[]
+
+  @@unique([institutionId, email, phone])
+  @@index([institutionId])
+  @@index([assignedToId])
+  @@index([activityScore])
+  @@map("leads")
+}
+
+model ActivityLog {
+  id            String   @id @default(cuid())
+  leadId        String
+  institutionId String
+  activityType  String
+  pointsAdded   Int
+  description   String?
+  idempotencyKey String? @unique
+  createdAt     DateTime @default(now())
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([institutionId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
+
+model ScoreRule {
+  id            String   @id @default(cuid())
+  institutionId String
+  activityType  String
+  points        Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+
+  @@unique([institutionId, activityType])
+  @@index([institutionId])
+  @@map("score_rules")
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  leadId      String
+  assignedToId String
+  title       String
+  dueAt       DateTime
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lead       Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignedTo User @relation("AssignedToUser", fields: [assignedToId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([assignedToId])
+  @@index([dueAt])
+  @@map("tasks")
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  leadId    String
+  createdById String
+  content   String
+  createdAt DateTime @default(now())
+
+  lead      Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdBy User @relation("CreatedByUser", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([createdById])
+  @@map("notes")
+}
